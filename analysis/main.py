@@ -1,3 +1,4 @@
+#new main.py
 import sqlite3
 import pandas as pd
 from fastapi import FastAPI, HTTPException
@@ -13,6 +14,7 @@ from analytics_module import (
     predictive_allocation,
     rollback_with_allocation,
     alerts,
+    complete_equipment_profile,
     run_all
 )
 
@@ -115,10 +117,24 @@ def root():
 
 @app.get("/run-all")
 def run_all_analysis():
+    print("=== Run All Analysis API Called ===")
     tables = list(TABLE_COLUMNS.keys())
     dfs = fetch_data_from_db(tables)
+    print(f"Tables loaded: {tables}")
+    print(f"Dataframes loaded: {list(dfs.keys())}")
+    
     results = run_all(dfs)
-    return {k: v.to_dict(orient="records") for k, v in results.items()}
+    print(f"Results keys: {list(results.keys())}")
+    
+    # Convert all dataframes to records
+    response = {}
+    for k, v in results.items():
+        if isinstance(v, pd.DataFrame):
+            response[k] = v.to_dict(orient="records")
+        else:
+            response[k] = v
+    
+    return response
 
 
 # -------------------------------------
@@ -131,7 +147,7 @@ def get_asset_dashboard():
     dfs = fetch_data_from_db(["RentalTransactions", "EquipmentMaster", "UsageMetrics", "AlertsNotifications", "AIFeatures", "MaintenanceHealth", "FinancialData"])
     print(f"Dataframes loaded: {list(dfs.keys())}")
     print(f"Alerts dataframe shape: {dfs['alerts'].shape if 'alerts' in dfs else 'Not found'}")
-    result = asset_dashboard(dfs)
+    result = complete_equipment_profile(dfs)  # Use complete profile instead of basic asset_dashboard
     print(f"Result shape: {result.shape}")
     print(f"Result columns: {list(result.columns)}")
     print(f"Alert fields present: {'alert_type' in result.columns}, {'overdue_status' in result.columns}, {'anomaly_flag' in result.columns}")
@@ -186,6 +202,13 @@ def get_alerts():
         ["RentalTransactions", "EquipmentMaster", "UsageMetrics", "MaintenanceHealth", "AIFeatures"]
     )
     result = alerts(dfs)
+    return result.to_dict(orient="records")
+
+
+@app.get("/complete-equipment-profile")
+def get_complete_equipment_profile():
+    dfs = fetch_data_from_db(["RentalTransactions", "EquipmentMaster", "UsageMetrics", "AlertsNotifications", "AIFeatures", "MaintenanceHealth", "FinancialData"])
+    result = complete_equipment_profile(dfs)
     return result.to_dict(orient="records")
 
 
