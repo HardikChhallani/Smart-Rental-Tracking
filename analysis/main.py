@@ -127,8 +127,14 @@ def run_all_analysis():
 
 @app.get("/asset-dashboard")
 def get_asset_dashboard():
-    dfs = fetch_data_from_db(["RentalTransactions", "EquipmentMaster", "UsageMetrics"])
+    print("=== Asset Dashboard API Called ===")
+    dfs = fetch_data_from_db(["RentalTransactions", "EquipmentMaster", "UsageMetrics", "AlertsNotifications", "AIFeatures", "MaintenanceHealth", "FinancialData"])
+    print(f"Dataframes loaded: {list(dfs.keys())}")
+    print(f"Alerts dataframe shape: {dfs['alerts'].shape if 'alerts' in dfs else 'Not found'}")
     result = asset_dashboard(dfs)
+    print(f"Result shape: {result.shape}")
+    print(f"Result columns: {list(result.columns)}")
+    print(f"Alert fields present: {'alert_type' in result.columns}, {'overdue_status' in result.columns}, {'anomaly_flag' in result.columns}")
     return result.to_dict(orient="records")
 
 

@@ -29,9 +29,41 @@ def asset_dashboard(dfs: Dict[str, pd.DataFrame]) -> pd.DataFrame:
     else:
         last_usage = pd.DataFrame(columns=["equipment_id","date","engine_hours_per_day","idle_hours_per_day","location_coordinates"])
 
+    # Merge with alert data
+    if "alerts" in dfs:
+        alerts_data = dfs["alerts"].copy()
+    else:
+        alerts_data = pd.DataFrame(columns=["equipment_id","alert_type","overdue_status","reminder_sent_date"])
+    
+    # Merge with AI features
+    if "ai" in dfs:
+        ai_data = dfs["ai"].copy()
+    else:
+        ai_data = pd.DataFrame(columns=["equipment_id","utilization_rate","idle_ratio","predicted_demand_score","anomaly_flag","recommended_site"])
+    
+    # Merge with maintenance data
+    if "maintenance" in dfs:
+        maintenance_data = dfs["maintenance"].copy()
+    else:
+        maintenance_data = pd.DataFrame(columns=["equipment_id","last_service_date","next_service_due","breakdowns_reported","condition_status","maintenance_costs"])
+    
+    # Merge with financial data
+    if "financial" in dfs:
+        financial_data = dfs["financial"].copy()
+    else:
+        financial_data = pd.DataFrame(columns=["equipment_id","rental_rate_per_day","total_rental_cost","penalty_cost","fuel_cost","maintenance_cost"])
+
     dash = (rentals
             .merge(equipment, on="equipment_id", how="right")
             .merge(last_usage[["equipment_id","date","engine_hours_per_day","idle_hours_per_day","location_coordinates"]],
+                   on="equipment_id", how="left")
+            .merge(alerts_data[["equipment_id","alert_type","overdue_status","reminder_sent_date"]],
+                   on="equipment_id", how="left")
+            .merge(ai_data[["equipment_id","utilization_rate","idle_ratio","predicted_demand_score","anomaly_flag","recommended_site"]],
+                   on="equipment_id", how="left")
+            .merge(maintenance_data[["equipment_id","last_service_date","next_service_due","breakdowns_reported","condition_status","maintenance_costs"]],
+                   on="equipment_id", how="left")
+            .merge(financial_data[["equipment_id","rental_rate_per_day","total_rental_cost","penalty_cost","fuel_cost","maintenance_cost"]],
                    on="equipment_id", how="left"))
     dash.rename(columns={
         "date":"last_seen",
@@ -47,7 +79,11 @@ def asset_dashboard(dfs: Dict[str, pd.DataFrame]) -> pd.DataFrame:
     return dash[[
         "equipment_id","type","qr_tag_id","site_id","status","check_out_date",
         "expected_return_date","check_in_date","last_seen","last_engine_hpd","last_idle_hpd",
-        "utilization_pct_snapshot","location_coordinates"
+        "utilization_pct_snapshot","location_coordinates","alert_type","overdue_status",
+        "reminder_sent_date","utilization_rate","idle_ratio","predicted_demand_score",
+        "anomaly_flag","recommended_site","last_service_date","next_service_due",
+        "breakdowns_reported","condition_status","maintenance_costs","rental_rate_per_day",
+        "total_rental_cost","penalty_cost","fuel_cost","maintenance_cost"
     ]].drop_duplicates("equipment_id")
 
 # ---------------------------------

@@ -1,5 +1,10 @@
+/* Caterpillar Theme - Asset Management Dashboard */
+
 .App {
-  text-align: center;
+  text-align: center !important;
+  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 25%, #1a1a1a 50%, #0f0f0f 100%) !important;
+  min-height: 100vh !important;
+  color: #ffffff !important;
 }
 
 .App-logo {
@@ -14,25 +19,180 @@
 }
 
 .App-header {
-  background-color: #282c34;
+  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   font-size: calc(10px + 2vmin);
-  color: white;
+  color: #FFCD00;
 }
 
 .App-link {
-  color: #61dafb;
+  color: #FFCD00;
+  text-decoration: none;
+  font-weight: 600;
 }
 
+.App-link:hover {
+  color: #FFD700;
+  text-decoration: underline;
+}
+
+/* Caterpillar Brand Colors */
+:root {
+  --caterpillar-yellow: #FFCD00;
+  --caterpillar-yellow-dark: #FFB800;
+  --caterpillar-yellow-light: #FFE066;
+  --caterpillar-black: #000000;
+  --caterpillar-gray: #333333;
+  --caterpillar-gray-light: #666666;
+  --caterpillar-white: #FFFFFF;
+  --caterpillar-gray-bg: #F8F9FA;
+}
+
+/* Global Styles */
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--caterpillar-gray-bg);
+}
+
+/* Button Styles */
+.btn-caterpillar {
+  background-color: var(--caterpillar-yellow) !important;
+  color: var(--caterpillar-black) !important;
+  border: none !important;
+  padding: 12px 24px !important;
+  border-radius: 8px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  transition: all 0.3s ease !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+}
+
+.btn-caterpillar:hover {
+  background-color: var(--caterpillar-yellow-dark) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15) !important;
+}
+
+.btn-caterpillar:active {
+  transform: translateY(0) !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Card Styles */
+.card-caterpillar {
+  background: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%) !important;
+  border: 2px solid var(--caterpillar-yellow) !important;
+  border-radius: 12px !important;
+  padding: 24px !important;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3), 0 0 20px rgba(255, 205, 0, 0.1) !important;
+  transition: all 0.3s ease !important;
+  color: #ffffff !important;
+}
+
+.card-caterpillar:hover {
+  border-color: var(--caterpillar-yellow) !important;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.4), 0 0 30px rgba(255, 205, 0, 0.2) !important;
+}
+
+/* Tab Styles */
+.tab-caterpillar {
+  background-color: #F3F4F6 !important;
+  color: var(--caterpillar-gray) !important;
+  border: none !important;
+  padding: 12px 20px !important;
+  border-radius: 8px !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  transition: all 0.3s ease !important;
+}
+
+.tab-caterpillar:hover {
+  background-color: var(--caterpillar-yellow-light) !important;
+  color: var(--caterpillar-black) !important;
+}
+
+.tab-caterpillar.active {
+  background-color: var(--caterpillar-yellow) !important;
+  color: var(--caterpillar-black) !important;
+  font-weight: 600 !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Status Badge Styles */
+.status-badge {
+  background-color: var(--caterpillar-yellow-light) !important;
+  color: var(--caterpillar-black) !important;
+  padding: 6px 12px !important;
+  border-radius: 20px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  border: 1px solid var(--caterpillar-yellow) !important;
+}
+
+/* Header Styles */
+.dashboard-header {
+  color: var(--caterpillar-black) !important;
+  font-weight: 700 !important;
+  margin-bottom: 8px !important;
+}
+
+.dashboard-subtitle {
+  color: var(--caterpillar-gray-light) !important;
+  font-size: 18px !important;
+  margin-bottom: 24px !important;
+}
+
+/* Loading Animation */
 @keyframes App-logo-spin {
   from {
     transform: rotate(0deg);
   }
   to {
     transform: rotate(360deg);
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--caterpillar-yellow);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--caterpillar-yellow-dark);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .card-caterpillar {
+    padding: 16px;
+  }
+  
+  .btn-caterpillar {
+    padding: 10px 20px;
+    font-size: 14px;
+  }
+  
+  .tab-caterpillar {
+    padding: 10px 16px;
+    font-size: 14px;
   }
 }
