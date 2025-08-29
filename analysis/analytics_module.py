@@ -2,16 +2,10 @@ import pandas as pd
 from typing import Dict
 from datetime import datetime
 
-# ---------------------------------
-# Utility
-# ---------------------------------
 def _today():
     """Returns today's date as a pandas datetime object."""
     return pd.to_datetime(datetime.today().strftime("%Y-%m-%d"))
 
-# ---------------------------------
-# 1) Complete Equipment Profile (REWRITTEN & CENTRALIZED)
-# ---------------------------------
 def complete_equipment_profile(dfs: Dict[str, pd.DataFrame]) -> pd.DataFrame:
     """
     Creates a complete, wide-format profile for each piece of equipment by merging all
@@ -141,9 +135,6 @@ def detect_overdue(dfs: Dict[str, pd.DataFrame]) -> pd.DataFrame:
     overdue["overdue_days"] = (today - overdue["expected_return_date"]).dt.days
     return overdue[["equipment_id","site_id","expected_return_date","overdue_days"]]
 
-# ---------------------------------
-# 5) Maintenance alerts (No changes needed)
-# ---------------------------------
 def maintenance_alerts(dfs: Dict[str, pd.DataFrame],
                        threshold_hours: int = 200,
                        threshold_days: int = 180) -> pd.DataFrame:
@@ -162,9 +153,6 @@ def maintenance_alerts(dfs: Dict[str, pd.DataFrame],
     return alerts[["equipment_id","last_service_date","engine_hours_per_day",
                    "service_due_hours","service_due_days","service_alert"]]
 
-# ---------------------------------
-# 6) Anomaly detection (Minor update to use the full profile)
-# ---------------------------------
 def anomalies(dfs: Dict[str, pd.DataFrame]) -> pd.DataFrame:
     profile = complete_equipment_profile(dfs)
     usage = usage_metrics(dfs)[["equipment_id","utilization_pct","underutilized"]]

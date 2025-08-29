@@ -25,6 +25,7 @@ const Dashboard = () => {
   const [analysisData, setAnalysisData] = useState({});
   const [equipmentData, setEquipmentData] = useState([]);
   const [loading, setLoading] = useState({});
+  const [emailPopup, setEmailPopup] = useState({ show: false, siteId: '' });
   const fileInputRef = useRef(null);
   const chatInputRef = useRef(null);
 
@@ -387,6 +388,11 @@ ${resultDisplay}
     }
     
     return actions.slice(0, 3).join('\n'); // Show top 3 actions
+  };
+
+  // Function to handle alert click and show email popup
+  const handleAlertClick = (siteId) => {
+    setEmailPopup({ show: true, siteId });
   };
 
   const TabButton = ({ id, icon: Icon, label, active, onClick }) => (
@@ -785,13 +791,18 @@ ${resultDisplay}
                                 </div>
 
                                 {/* Alerts & Notifications */}
-                                <div style={{ 
-                                  padding: '12px',
-                                  backgroundColor: hasAlerts(item) ? 'rgba(255, 107, 107, 0.15)' : 'rgba(255, 255, 255, 0.03)',
-                                  borderRadius: '8px',
-                                  border: hasAlerts(item) ? '2px solid #FF6B6B' : '1px solid rgba(255, 255, 255, 0.05)',
-                                  boxShadow: hasAlerts(item) ? '0 2px 8px rgba(255, 107, 107, 0.3)' : 'none'
-                                }}>
+                                <div 
+                                  onClick={() => hasAlerts(item) && handleAlertClick(item.site_id)}
+                                  style={{ 
+                                    padding: '12px',
+                                    backgroundColor: hasAlerts(item) ? 'rgba(255, 107, 107, 0.15)' : 'rgba(255, 255, 255, 0.03)',
+                                    borderRadius: '8px',
+                                    border: hasAlerts(item) ? '2px solid #FF6B6B' : '1px solid rgba(255, 255, 255, 0.05)',
+                                    boxShadow: hasAlerts(item) ? '0 2px 8px rgba(255, 107, 107, 0.3)' : 'none',
+                                    cursor: hasAlerts(item) ? 'pointer' : 'default',
+                                    transition: 'all 0.2s ease'
+                                  }}
+                                >
                                   <div style={{ 
                                     color: hasAlerts(item) ? '#FF6B6B' : '#FFCD00', 
                                     fontSize: '12px', 
@@ -836,6 +847,17 @@ ${resultDisplay}
                                         textAlign: 'center'
                                       }}>
                                         ⚠️ REQUIRES IMMEDIATE ATTENTION
+                                      </div>
+                                    )}
+                                    {hasAlerts(item) && (
+                                      <div style={{ 
+                                        marginTop: '4px', 
+                                        fontSize: '9px', 
+                                        color: '#FFCD00', 
+                                        fontStyle: 'italic',
+                                        textAlign: 'center'
+                                      }}>
+                                        Click to send email notification
                                       </div>
                                     )}
                                   </div>
@@ -1852,6 +1874,72 @@ ${resultDisplay}
                   )}
                 </div>
               </Card>
+            </div>
+          </div>
+        )}
+
+        {/* Email Sent Popup */}
+        {emailPopup.show && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000
+          }}>
+            <div style={{
+              backgroundColor: '#2a2a2a',
+              border: '2px solid #FFCD00',
+              borderRadius: '16px',
+              padding: '32px',
+              maxWidth: '400px',
+              textAlign: 'center',
+              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.5)'
+            }}>
+              <div style={{
+                fontSize: '48px',
+                marginBottom: '16px'
+              }}>
+                📧
+              </div>
+              <h3 style={{
+                color: '#FFCD00',
+                fontSize: '24px',
+                fontWeight: '700',
+                marginBottom: '16px'
+              }}>
+                Email Sent Successfully!
+              </h3>
+              <p style={{
+                color: '#ffffff',
+                fontSize: '16px',
+                marginBottom: '24px',
+                lineHeight: '1.5'
+              }}>
+                An email has been sent to <strong>{emailPopup.siteId}</strong> regarding the alert.
+              </p>
+              <button
+                onClick={() => setEmailPopup({ show: false, siteId: '' })}
+                style={{
+                  backgroundColor: '#FFCD00',
+                  color: '#000000',
+                  border: 'none',
+                  padding: '12px 24px',
+                  borderRadius: '10px',
+                  cursor: 'pointer',
+                  fontWeight: '600',
+                  fontSize: '14px',
+                  transition: 'all 0.3s ease',
+                  boxShadow: '0 4px 8px rgba(0, 0, 0, 0.2)'
+                }}
+              >
+                Close
+              </button>
             </div>
           </div>
         )}
