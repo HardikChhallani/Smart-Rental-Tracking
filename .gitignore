@@ -7,3 +7,4 @@ migrations
 venv/
 .DS_Store
 .venv
+.env
