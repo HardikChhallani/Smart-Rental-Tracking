@@ -56,6 +56,32 @@ Now, please help the user with their equipment rental question: {user_query}
 Provide a helpful, professional response that fits the Smart Rental Equipment Management theme.
 """
 
+# Enhanced prompt for converting database results to natural language
+db_to_nl_prompt = """
+You are an AI assistant for a Smart Rental Equipment Management System. Convert the following database query result into a natural, professional response.
+
+### Context:
+- **User Query**: {user_query}
+- **SQL Query**: {sql_query}
+- **Database Result**: {db_result}
+
+### Instructions:
+- Provide a natural language explanation of the results
+- Use professional, friendly tone appropriate for equipment rental business
+- Include relevant insights or recommendations when appropriate
+- Format the response clearly with proper structure
+- If the result is empty, explain what this means in business context
+- Use equipment rental terminology appropriately
+
+### Response should be:
+- Professional but conversational
+- Actionable where possible
+- Clear and well-formatted
+- Include relevant emojis for better readability
+
+Please convert the database result into a natural language response:
+"""
+
 # Predefined user query → SQL mapping
 user_query_map = {
     "Equipment with highest maintenance costs": {
@@ -76,6 +102,45 @@ def generate_ai_response(user_query: str) -> str:
         return response.text.strip()
     except Exception as e:
         return f"I apologize, but I'm experiencing technical difficulties with my AI analysis. Please try again or contact support if the issue persists. Error: {str(e)}"
+
+def convert_db_result_to_nl(user_query: str, sql_query: str, db_result: list[dict]) -> str:
+    """Convert database result to natural language using AI."""
+    try:
+        model = genai.GenerativeModel("gemini-2.5-pro")
+        prompt = db_to_nl_prompt.format(
+            user_query=user_query,
+            sql_query=sql_query,
+            db_result=db_result
+        )
+        response = model.generate_content(prompt)
+        return response.text.strip()
+    except Exception as e:
+        # Fallback to basic formatting if AI fails
+        return format_db_result_basic(user_query, db_result)
+
+def format_db_result_basic(user_query: str, db_result: list[dict]) -> str:
+    """Basic formatting fallback for database results."""
+    if not db_result:
+        return f"📋 **Query Result**\n\nNo data found for your query: '{user_query}'. This could mean the equipment database doesn't contain matching records, or all relevant equipment might be currently available."
+    
+    if len(db_result) == 1 and len(db_result[0]) == 1:
+        # Single value result
+        key, value = next(iter(db_result[0].items()))
+        return f"📊 **Result for '{user_query}'**\n\n**{key.replace('_', ' ').title()}**: {value}\n\n💡 This information can help you make informed decisions about your equipment rental operations."
+    
+    # Multiple results
+    result_text = f"📊 **Results for '{user_query}'**\n\n"
+    for i, record in enumerate(db_result[:10], 1):  # Limit to first 10 results
+        result_text += f"**Record {i}:**\n"
+        for key, value in record.items():
+            result_text += f"• {key.replace('_', ' ').title()}: {value}\n"
+        result_text += "\n"
+    
+    if len(db_result) > 10:
+        result_text += f"... and {len(db_result) - 10} more records.\n\n"
+    
+    result_text += "💡 This data provides insights into your equipment rental operations."
+    return result_text
 
 def synthesize_nl_from_db_result(user_query: str, db_result: list[dict]) -> str:
     """Converts DB JSON result into themed natural language response."""
@@ -104,6 +169,8 @@ def synthesize_nl_from_db_result(user_query: str, db_result: list[dict]) -> str:
 @app.post("/query")
 async def query_database(payload: dict = Body(...)):
     user_query = payload.get("query")
+    sql_query = payload.get("sql")  # Add support for SQL input
+    
     if not user_query:
         return {"output": "I need a query to help you with your equipment rental analysis. Please provide a question about your equipment, rentals, maintenance, or operations."}
 
@@ -120,7 +187,58 @@ async def query_database(payload: dict = Body(...)):
         except Exception as e:
             return {"output": f"I encountered an error while accessing your equipment database: {str(e)}. Please try again or contact technical support."}
     
-    # If no predefined match, use AI analysis
+    # If SQL query is provided (for dynamic queries)
+    if sql_query:
+        try:
+            mcp_result = await run_sql_tool({"sql": sql_query})
+            db_output = mcp_result[0].json() if mcp_result else []
+            
+            # Convert database result to natural language using AI
+            nl_output = convert_db_result_to_nl(user_query, sql_query, db_output)
+            return {"output": nl_output}
+        except Exception as e:
+            return {"output": f"I encountered an error while processing your database query: {str(e)}. Please check your SQL syntax or contact technical support."}
+    
+    # If no predefined match and no SQL, use AI analysis
+    ai_response = generate_ai_response(user_query)
+    return {"output": ai_response}
+
+# New endpoint for handling queries with SQL generation and natural language conversion
+@app.post("/query_with_sql")
+async def query_with_sql_generation(payload: dict = Body(...)):
+    """
+    Enhanced endpoint that can handle:
+    1. User query + Generated SQL + Database result → Natural Language
+    2. Just user query → AI analysis
+    """
+    user_query = payload.get("query")
+    sql_query = payload.get("sql")
+    db_result = payload.get("db_result")
+    
+    if not user_query:
+        return {"output": "I need a query to help you with your equipment rental analysis."}
+    
+    # If we have all three components (query, SQL, db_result), convert to natural language
+    if user_query and sql_query and db_result is not None:
+        try:
+            nl_output = convert_db_result_to_nl(user_query, sql_query, db_result)
+            return {"output": nl_output}
+        except Exception as e:
+            # Fallback to basic formatting
+            nl_output = format_db_result_basic(user_query, db_result)
+            return {"output": nl_output}
+    
+    # If we have query and SQL but no db_result, execute SQL first
+    if user_query and sql_query:
+        try:
+            mcp_result = await run_sql_tool({"sql": sql_query})
+            db_output = mcp_result[0].json() if mcp_result else []
+            nl_output = convert_db_result_to_nl(user_query, sql_query, db_output)
+            return {"output": nl_output}
+        except Exception as e:
+            return {"output": f"I encountered an error while executing your database query: {str(e)}. Please check your SQL syntax or contact technical support."}
+    
+    # Fallback to AI analysis
     ai_response = generate_ai_response(user_query)
     return {"output": ai_response}
 

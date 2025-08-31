@@ -15,8 +15,6 @@ def complete_equipment_profile(dfs: Dict[str, pd.DataFrame]) -> pd.DataFrame:
     # Start with the master list of all equipment
     base = dfs["equipment"].copy()
 
-    # --- Handle one-to-many relationships by getting the LATEST record ---
-
     # Get the latest rental transaction for each equipment
     if "rentals" in dfs and not dfs["rentals"].empty:
         latest_rentals = dfs["rentals"].sort_values("check_out_date", ascending=False).drop_duplicates("equipment_id")
@@ -27,14 +25,10 @@ def complete_equipment_profile(dfs: Dict[str, pd.DataFrame]) -> pd.DataFrame:
         latest_usage = dfs["usage"].sort_values("date", ascending=False).drop_duplicates("equipment_id")
         base = base.merge(latest_usage, on="equipment_id", how="left")
 
-    # --- Handle one-to-one relationships with a direct merge ---
-    
     # Merge remaining data tables
     for table_name in ["maintenance", "alerts", "financial", "ai"]:
         if table_name in dfs and not dfs[table_name].empty:
             base = base.merge(dfs[table_name], on="equipment_id", how="left")
-
-    # --- Add Calculated Fields ---
 
     # Calculate status based on dates
     today = _today()
@@ -56,8 +50,6 @@ def complete_equipment_profile(dfs: Dict[str, pd.DataFrame]) -> pd.DataFrame:
     else:
         base["utilization_pct_snapshot"] = None
 
-    # --- Finalize DataFrame ---
-    
     # Ensure all columns from the schema are present, adding them with None if missing
     expected_columns = [
         "equipment_id", "type", "qr_tag_id", "transaction_id", "site_id", 
@@ -79,9 +71,6 @@ def complete_equipment_profile(dfs: Dict[str, pd.DataFrame]) -> pd.DataFrame:
             
     return base[expected_columns]
 
-# ---------------------------------
-# 2) Asset dashboard (SIMPLIFIED - NOW A VIEW OF THE COMPLETE PROFILE)
-# ---------------------------------
 def asset_dashboard(dfs: Dict[str, pd.DataFrame]) -> pd.DataFrame:
     """
     Provides a summary view of the complete equipment profile, focusing on
@@ -102,12 +91,8 @@ def asset_dashboard(dfs: Dict[str, pd.DataFrame]) -> pd.DataFrame:
         "total_rental_cost", "penalty_cost", "fuel_cost", "maintenance_cost"
     ]
     
-    # Rename 'date' to 'last_seen' for clarity in the dashboard
     return full_profile[dashboard_columns].rename(columns={"date": "last_seen"})
 
-# ---------------------------------
-# 3) Usage metrics (No changes needed)
-# ---------------------------------
 def usage_metrics(dfs: Dict[str, pd.DataFrame]) -> pd.DataFrame:
     usage = dfs["usage"].copy()
     usage["total_hours"] = usage["engine_hours_per_day"] + usage["idle_hours_per_day"]
@@ -123,9 +108,6 @@ def usage_metrics(dfs: Dict[str, pd.DataFrame]) -> pd.DataFrame:
     metrics["underutilized"] = (metrics["utilization_pct"] < 50).astype(int)
     return metrics
 
-# ---------------------------------
-# 4) Overdue alerts (No changes needed)
-# ---------------------------------
 def detect_overdue(dfs: Dict[str, pd.DataFrame]) -> pd.DataFrame:
     rentals = dfs["rentals"].copy()
     today = _today()
@@ -170,9 +152,6 @@ def anomalies(dfs: Dict[str, pd.DataFrame]) -> pd.DataFrame:
         "anom_no_site","anom_low_util","anomaly_flag","utilization_pct"
     ]]
 
-# ---------------------------------
-# 7) Predictive allocation (No changes needed)
-# ---------------------------------
 def predictive_allocation(dfs: Dict[str, pd.DataFrame]) -> pd.DataFrame:
     ai = dfs["ai"].copy()
     equipment = dfs["equipment"].copy()
@@ -199,9 +178,6 @@ def predictive_allocation(dfs: Dict[str, pd.DataFrame]) -> pd.DataFrame:
 
     return pd.DataFrame(allocations, columns=["equipment_id","recommended_site_id","recommendation"])
 
-# ---------------------------------
-# 8) Rollback allocation (No changes needed)
-# ---------------------------------
 def rollback_with_allocation(dfs: Dict[str, pd.DataFrame]) -> pd.DataFrame:
     rentals = dfs["rentals"].copy()
     today = _today()
@@ -218,9 +194,6 @@ def rollback_with_allocation(dfs: Dict[str, pd.DataFrame]) -> pd.DataFrame:
     result["action"] = result["recommendation"].fillna("Return to warehouse")
     return result[["equipment_id","site_id","expected_return_date","action"]]
 
-# ---------------------------------
-# 9) Alerts aggregator (No changes needed)
-# ---------------------------------
 def alerts(dfs: Dict[str, pd.DataFrame]) -> pd.DataFrame:
     alerts_list = []
 
@@ -246,9 +219,6 @@ def alerts(dfs: Dict[str, pd.DataFrame]) -> pd.DataFrame:
 
     return pd.DataFrame(alerts_list, columns=["equipment_id","alert_type","message"])
 
-# ---------------------------------
-# Orchestrator (UPDATED)
-# ---------------------------------
 def run_all(dfs: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
     """
     Executes all analytics functions and returns a dictionary of resulting DataFrames.

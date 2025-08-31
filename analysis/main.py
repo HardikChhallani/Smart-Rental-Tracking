@@ -1,4 +1,3 @@
-#new main.py
 import sqlite3
 import pandas as pd
 from fastapi import FastAPI, HTTPException

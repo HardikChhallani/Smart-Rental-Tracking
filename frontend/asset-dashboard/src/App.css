@@ -140,7 +140,7 @@ body {
 
 /* Header Styles */
 .dashboard-header {
-  color: var(--caterpillar-black) !important;
+  color: var(--caterpillar-white) !important;
   font-weight: 700 !important;
   margin-bottom: 8px !important;
 }

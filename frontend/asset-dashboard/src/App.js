@@ -15,6 +15,7 @@ import {
   Bell,
   Zap
 } from 'lucide-react';
+import CaterpillarLogo from './image.png';
 
 const Dashboard = () => {
   const [activeTab, setActiveTab] = useState('overview');
@@ -28,6 +29,9 @@ const Dashboard = () => {
   const [emailPopup, setEmailPopup] = useState({ show: false, siteId: '' });
   const fileInputRef = useRef(null);
   const chatInputRef = useRef(null);
+  const [focusedEquipment, setFocusedEquipment] = useState(null);
+  const [hoveredEquipmentId, setHoveredEquipmentId] = useState(null);
+  const [qrTab, setQrTab] = useState('overview');
 
   // Debug function
   const debugLog = (message, data = null) => {
@@ -116,7 +120,38 @@ const Dashboard = () => {
       
       const data = await response.json();
       debugLog('QR scan result:', data);
-      setQrResult(data);
+
+      // Enrich minimal payloads like { qr_data: "EQ001" } so Details tab isn't empty
+      const enrichFromCode = (code) => {
+        const fallback = {
+          manufacturer: 'Caterpillar',
+          model: '320D2',
+          serial_number: `${code}-SERIAL`,
+          year: 2022,
+          hours_total: 0,
+          site_id: 'UNASSIGNED',
+          status: 'Active',
+          check_out_date: null,
+          expected_return_date: null,
+          check_in_date: null,
+          operator_id: null,
+          rental_rate_per_day: null,
+          last_service_date: null,
+          warranty_expiration: null,
+          qr_tag_id: code,
+          location_coordinates: null,
+          notes: 'Scanned via fallback enrichment',
+          meta: { scanned_at: new Date().toISOString(), source: 'frontend-fallback', reader: 'n/a' }
+        };
+        return { equipment_id: code, type: 'Unknown', ...fallback };
+      };
+
+      const enriched = (data && data.qr_data && !data.type)
+        ? { ...enrichFromCode(data.qr_data), ...data }
+        : data;
+
+      setQrResult(enriched);
+      setQrTab('details');
     } catch (error) {
       debugLog('QR scan error:', error.message);
       setQrResult({ 
@@ -170,52 +205,17 @@ const Dashboard = () => {
       const data = await response.json();
       debugLog('Full chat response data:', data);
       
-      // Format the response from your FastAPI structure
+      // Parse backend output (expects { output: string | object })
       let aiResponseContent = '';
-      
-      if (data.error) {
+      if (data && typeof data.output !== 'undefined') {
+        aiResponseContent =
+          typeof data.output === 'string'
+            ? data.output
+            : JSON.stringify(data.output, null, 2);
+      } else if (data && data.error) {
         aiResponseContent = `Error: ${data.error}`;
       } else {
-        // Create a nicely formatted response from your API structure
-        const dbResult = data.db_result;
-        let resultDisplay = 'No result';
-        
-        if (dbResult && Array.isArray(dbResult) && dbResult.length > 0) {
-          if (dbResult.length === 1 && typeof dbResult[0] === 'object') {
-            // Single object result
-            resultDisplay = JSON.stringify(dbResult[0], null, 2);
-          } else if (dbResult.length > 1) {
-            // Multiple results - show first few
-            const displayCount = Math.min(dbResult.length, 5);
-            resultDisplay = `Found ${dbResult.length} results. Showing first ${displayCount}:\n\n${JSON.stringify(dbResult.slice(0, displayCount), null, 2)}`;
-            if (dbResult.length > 5) {
-              resultDisplay += `\n\n... and ${dbResult.length - 5} more results`;
-            }
-          } else {
-            // Other array results
-            resultDisplay = JSON.stringify(dbResult, null, 2);
-          }
-        } else if (dbResult && typeof dbResult === 'object') {
-          // Object result
-          resultDisplay = JSON.stringify(dbResult, null, 2);
-        } else if (dbResult && dbResult !== '') {
-          // String or other result
-          resultDisplay = String(dbResult);
-        }
-        
-        aiResponseContent = `
-**Query:** ${data.user_query || currentInput}
-
-**SQL Generated:** 
-\`\`\`sql
-${data.sql_generated || 'No SQL generated'}
-\`\`\`
-
-**Reasoning:** ${data.model_reasoning || 'No reasoning provided'}
-
-**Database Result:**
-${resultDisplay}
-        `.trim();
+        aiResponseContent = 'No response received from AI service.';
       }
       
       const aiMessage = { 
@@ -307,13 +307,19 @@ ${resultDisplay}
     }
   };
 
+  // Helper to normalize and check for Good condition
+  const isConditionGood = (status) => {
+    return (status || '').toLowerCase() === 'good';
+  };
+
   // Helper function to check if equipment has alerts
   const hasAlerts = (item) => {
     return (
-      item.alert_type && item.alert_type !== 'None' ||
+      // Only consider alert_type when condition is not Good
+      ((item.alert_type && item.alert_type !== 'None') && !isConditionGood(item.condition_status)) ||
       item.overdue_status === 1 ||
       item.anomaly_flag === 1 ||
-      item.condition_status === 'Critical'
+      (item.condition_status && item.condition_status.toLowerCase() === 'critical')
     );
   };
 
@@ -414,7 +420,8 @@ ${resultDisplay}
         boxShadow: active ? '0 6px 12px rgba(255, 205, 0, 0.4)' : '0 4px 8px rgba(0, 0, 0, 0.3)',
         fontSize: '16px',
         minWidth: '140px',
-        justifyContent: 'center'
+        justifyContent: 'center',
+        textAlign: 'center'
       }}
     >
       <Icon size={20} />
@@ -485,7 +492,11 @@ ${resultDisplay}
         margin: '0 auto'
       }}>
         {/* Header */}
-        <div className="mb-12" style={{ textAlign: 'center' }}>
+        <div className="mb-12" style={{ textAlign: 'center', position: 'relative' }}>
+          {/* Page logo inside header so it scrolls away with content */}
+          <div style={{ position: 'absolute', top: '0', left: '0' }}>
+            <img src={CaterpillarLogo} alt="Logo" style={{ width: '130px', height: '40px', borderRadius: '8px' }} />
+          </div>
           <h1 className="dashboard-header text-4xl mb-4" style={{ 
             color: '#FFCD00', 
             textShadow: '2px 2px 4px rgba(0,0,0,0.5)',
@@ -519,36 +530,7 @@ ${resultDisplay}
           <TabButton id="analysis" icon={TrendingUp} label="Analysis" active={activeTab === 'analysis'} onClick={setActiveTab} />
         </div>
 
-        {/* Debug Panel */}
-        <div className="mb-8 p-5 rounded-lg" style={{ 
-          background: 'linear-gradient(135deg, #FFCD00 0%, #FFB800 100%)',
-          border: '2px solid #FFCD00',
-          boxShadow: '0 6px 12px rgba(255, 205, 0, 0.3)',
-          textAlign: 'center'
-        }}>
-          <div className="flex items-center justify-center gap-4 text-sm">
-            <span className="font-semibold" style={{ color: '#000000' }}>Active Tab: {activeTab}</span>
-            <span style={{ color: '#000000' }}>|</span>
-            <button 
-              onClick={testAPIs}
-              style={{ 
-                color: '#000000', 
-                textDecoration: 'underline', 
-                fontWeight: '600',
-                padding: '4px 8px',
-                borderRadius: '4px',
-                border: 'none',
-                backgroundColor: 'transparent',
-                cursor: 'pointer',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              Test All APIs
-            </button>
-            <span style={{ color: '#000000' }}>|</span>
-            <span style={{ color: '#000000' }}>Check browser console for detailed logs</span>
-          </div>
-        </div>
+        {/* Debug Panel removed */}
 
         {/* Overview Tab */}
         {activeTab === 'overview' && (
@@ -693,7 +675,7 @@ ${resultDisplay}
                                   <div style={{ color: '#ffffff', fontSize: '11px', lineHeight: '1.4' }}>
                                     Check Out: {item.check_out_date || 'N/A'}<br/>
                                     Expected Return: {item.expected_return_date || 'N/A'}<br/>
-                                    {item.check_in_date && `Returned: ${item.check_in_date}`}
+                                    Check In: {item.check_in_date || 'N/A'}
                                   </div>
                                 </div>
 
@@ -708,8 +690,8 @@ ${resultDisplay}
                                     ⚡ Usage Metrics
                                   </div>
                                   <div style={{ color: '#ffffff', fontSize: '11px', lineHeight: '1.4' }}>
-                                    Engine Hours: {item.last_engine_hpd || 'N/A'} hrs/day<br/>
-                                    Idle Hours: {item.last_idle_hpd || 'N/A'} hrs/day<br/>
+                                    Engine Hours: {item.engine_hours_per_day || 'N/A'} hrs/day<br/>
+                                    Idle Hours: {item.idle_hours_per_day || 'N/A'} hrs/day<br/>
                                     Utilization: {item.utilization_pct_snapshot ? `${item.utilization_pct_snapshot.toFixed(1)}%` : 'N/A'}
                                   </div>
                                 </div>
@@ -725,7 +707,7 @@ ${resultDisplay}
                                     🕒 Last Activity
                                   </div>
                                   <div style={{ color: '#ffffff', fontSize: '11px', lineHeight: '1.4' }}>
-                                    Last Seen: {item.last_seen || 'N/A'}<br/>
+                                    Last Seen: {item.date || 'N/A'}<br/>
                                     Operating Days: {item.operating_days || 'N/A'}<br/>
                                     Downtime: {item.downtime_hours || '0'} hrs
                                   </div>
@@ -981,10 +963,186 @@ ${resultDisplay}
                     backgroundColor: '#2a2a2a',
                     border: '1px solid #555555'
                   }}>
-                    <h4 className="font-semibold mb-4" style={{ color: '#FFCD00' }}>QR Data:</h4>
-                    <pre className="text-sm whitespace-pre-wrap" style={{ color: '#ffffff' }}>
+                    <h4 className="font-semibold mb-4" style={{ color: '#FFCD00', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{
+                        width: '28px', height: '28px', borderRadius: '50%', backgroundColor: '#FFCD00', color: '#000',
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800
+                      }}>QR</span>
+                      QR Scan Result
+                    </h4>
+
+                    {/* Sub-tabs */}
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                      {['overview','details','raw'].map(id => (
+                        <button
+                          key={id}
+                          onClick={() => setQrTab(id)}
+                          style={{
+                            padding: '8px 12px',
+                            borderRadius: '8px',
+                            border: qrTab === id ? '2px solid #FFCD00' : '1px solid #555555',
+                            background: qrTab === id ? 'rgba(255,205,0,0.15)' : 'rgba(255,255,255,0.04)',
+                            color: '#ffffff',
+                            fontWeight: 600,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {id === 'overview' ? 'Overview' : id === 'details' ? 'Details' : 'Raw JSON'}
+                        </button>
+                      ))}
+                    </div>
+
+                    {qrTab === 'overview' && (
+                      <div style={{
+                        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', marginBottom: '4px'
+                      }}>
+                        <div style={{ padding: '10px', background: 'rgba(255,255,255,0.04)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                          <div style={{ color: '#888', fontSize: '11px' }}>Equipment ID</div>
+                          <div style={{ color: '#fff', fontSize: '13px', fontWeight: 600 }}>{qrResult.equipment_id || qrResult.qr_data}</div>
+                        </div>
+                        {qrResult.type && (
+                          <div style={{ padding: '10px', background: 'rgba(255,255,255,0.04)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                            <div style={{ color: '#888', fontSize: '11px' }}>Type</div>
+                            <div style={{ color: '#fff', fontSize: '13px' }}>{qrResult.type}</div>
+                          </div>
+                        )}
+                        {qrResult.status && (
+                          <div style={{ padding: '10px', background: 'rgba(255,255,255,0.04)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                            <div style={{ color: '#888', fontSize: '11px' }}>Status</div>
+                            <div style={{ color: '#fff', fontSize: '13px' }}>{qrResult.status}</div>
+                          </div>
+                        )}
+                        {qrResult.site_id && (
+                          <div style={{ padding: '10px', background: 'rgba(255,255,255,0.04)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                            <div style={{ color: '#888', fontSize: '11px' }}>Site</div>
+                            <div style={{ color: '#fff', fontSize: '13px' }}>{qrResult.site_id}</div>
+                          </div>
+                        )}
+                        {qrResult.check_out_date && (
+                          <div style={{ padding: '10px', background: 'rgba(255,255,255,0.04)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                            <div style={{ color: '#888', fontSize: '11px' }}>Check Out</div>
+                            <div style={{ color: '#fff', fontSize: '13px' }}>{qrResult.check_out_date}</div>
+                          </div>
+                        )}
+                        {qrResult.expected_return_date && (
+                          <div style={{ padding: '10px', background: 'rgba(255,255,255,0.04)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                            <div style={{ color: '#888', fontSize: '11px' }}>Expected Return</div>
+                            <div style={{ color: '#fff', fontSize: '13px' }}>{qrResult.expected_return_date}</div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {qrTab === 'details' && (
+                      <div style={{
+                        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px'
+                      }}>
+                        {/* Core specs */}
+                        <div style={{ padding: '10px', background: 'rgba(255,255,255,0.04)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                          <div style={{ color: '#888', fontSize: '11px' }}>Serial</div>
+                          <div style={{ color: '#fff', fontSize: '13px' }}>{qrResult.serial_number || 'N/A'}</div>
+                        </div>
+                        <div style={{ padding: '10px', background: 'rgba(255,255,255,0.04)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                          <div style={{ color: '#888', fontSize: '11px' }}>Model</div>
+                          <div style={{ color: '#fff', fontSize: '13px' }}>{qrResult.model || 'N/A'}</div>
+                        </div>
+                        <div style={{ padding: '10px', background: 'rgba(255,255,255,0.04)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                          <div style={{ color: '#888', fontSize: '11px' }}>Manufacturer</div>
+                          <div style={{ color: '#fff', fontSize: '13px' }}>{qrResult.manufacturer || 'N/A'}</div>
+                        </div>
+                        <div style={{ padding: '10px', background: 'rgba(255,255,255,0.04)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                          <div style={{ color: '#888', fontSize: '11px' }}>Year</div>
+                          <div style={{ color: '#fff', fontSize: '13px' }}>{qrResult.year || 'N/A'}</div>
+                        </div>
+                        <div style={{ padding: '10px', background: 'rgba(255,255,255,0.04)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                          <div style={{ color: '#888', fontSize: '11px' }}>Total Hours</div>
+                          <div style={{ color: '#fff', fontSize: '13px' }}>{qrResult.hours_total ?? 'N/A'}</div>
+                        </div>
+
+                        {/* Maintenance & warranty */}
+                        <div style={{ padding: '10px', background: 'rgba(255,255,255,0.04)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                          <div style={{ color: '#888', fontSize: '11px' }}>Last Service</div>
+                          <div style={{ color: '#fff', fontSize: '13px' }}>{qrResult.last_service_date || 'N/A'}</div>
+                        </div>
+                        <div style={{ padding: '10px', background: 'rgba(255,255,255,0.04)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                          <div style={{ color: '#888', fontSize: '11px' }}>Warranty</div>
+                          <div style={{ color: '#fff', fontSize: '13px' }}>{qrResult.warranty_expiration || 'N/A'}</div>
+                        </div>
+
+                        {/* QR & Location */}
+                        <div style={{ padding: '10px', background: 'rgba(255,255,255,0.04)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                          <div style={{ color: '#888', fontSize: '11px' }}>QR Tag</div>
+                          <div style={{ color: '#fff', fontSize: '13px' }}>{qrResult.qr_tag_id || 'N/A'}</div>
+                        </div>
+                        <div style={{ padding: '10px', background: 'rgba(255,255,255,0.04)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                          <div style={{ color: '#888', fontSize: '11px' }}>Location</div>
+                          <div style={{ color: '#fff', fontSize: '13px' }}>{qrResult.location_coordinates || 'N/A'}</div>
+                        </div>
+
+                        {/* Operations */}
+                        <div style={{ padding: '10px', background: 'rgba(255,255,255,0.04)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                          <div style={{ color: '#888', fontSize: '11px' }}>Operator</div>
+                          <div style={{ color: '#fff', fontSize: '13px' }}>{qrResult.operator_id || 'N/A'}</div>
+                        </div>
+                        <div style={{ padding: '10px', background: 'rgba(255,255,255,0.04)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                          <div style={{ color: '#888', fontSize: '11px' }}>Rate/Day</div>
+                          <div style={{ color: '#fff', fontSize: '13px' }}>{qrResult.rental_rate_per_day != null ? `$${qrResult.rental_rate_per_day}` : 'N/A'}</div>
+                        </div>
+
+                        {/* Metadata */}
+                        <div style={{ padding: '10px', background: 'rgba(255,255,255,0.04)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                          <div style={{ color: '#888', fontSize: '11px' }}>Scanned At</div>
+                          <div style={{ color: '#fff', fontSize: '13px' }}>{(qrResult.meta && qrResult.meta.scanned_at) || 'N/A'}</div>
+                        </div>
+                        <div style={{ padding: '10px', background: 'rgba(255,255,255,0.04)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                          <div style={{ color: '#888', fontSize: '11px' }}>Source</div>
+                          <div style={{ color: '#fff', fontSize: '13px' }}>{(qrResult.meta && qrResult.meta.source) || 'N/A'}</div>
+                        </div>
+                        <div style={{ padding: '10px', background: 'rgba(255,255,255,0.04)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                          <div style={{ color: '#888', fontSize: '11px' }}>Reader</div>
+                          <div style={{ color: '#fff', fontSize: '13px' }}>{(qrResult.meta && qrResult.meta.reader) || 'N/A'}</div>
+                        </div>
+
+                        {/* Notes */}
+                        <div style={{ padding: '10px', background: 'rgba(255,255,255,0.04)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)', gridColumn: '1 / -1' }}>
+                          <div style={{ color: '#888', fontSize: '11px' }}>Notes</div>
+                          <div style={{ color: '#fff', fontSize: '13px' }}>{qrResult.notes || 'N/A'}</div>
+                        </div>
+
+                        {/* Fallback: if most fields are N/A, show all available key-values */}
+                        {!(qrResult.serial_number || qrResult.model || qrResult.manufacturer || qrResult.year || qrResult.hours_total || qrResult.last_service_date || qrResult.warranty_expiration || qrResult.qr_tag_id || qrResult.location_coordinates || qrResult.operator_id || (qrResult.meta && (qrResult.meta.scanned_at || qrResult.meta.source || qrResult.meta.reader)) || qrResult.notes) && (
+                          <div style={{ gridColumn: '1 / -1' }}>
+                            <div style={{ color: '#FFCD00', fontWeight: 700, marginBottom: '8px' }}>Details</div>
+                            <div style={{
+                              display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '8px'
+                            }}>
+                              {Object.entries(qrResult).map(([key, value]) => (
+                                <div key={key} style={{ padding: '10px', background: 'rgba(255,255,255,0.04)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                                  <div style={{ color: '#888', fontSize: '11px' }}>{key}</div>
+                                  <div style={{ color: '#fff', fontSize: '13px', wordBreak: 'break-word' }}>{typeof value === 'object' ? JSON.stringify(value) : String(value)}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {qrTab === 'raw' && (
+                      <div style={{
+                        marginTop: '8px',
+                        maxHeight: '400px',
+                        overflow: 'auto',
+                        padding: '8px',
+                        background: 'rgba(255,255,255,0.03)',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(255,255,255,0.08)'
+                      }}>
+                        <pre className="text-sm" style={{ color: '#ffffff', margin: 0 }}>
                       {JSON.stringify(qrResult, null, 2)}
                     </pre>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1505,9 +1663,9 @@ ${resultDisplay}
 
         {/* Analysis Tab */}
         {activeTab === 'analysis' && (
-          <div style={{ padding: '10px 0' }}>
+          <div style={{ padding: '10px 0', position: 'relative' }}>
             {/* AI Analysis Overview */}
-            <div style={{ marginBottom: '16px' }}>
+            <div style={{ marginBottom: '16px', filter: focusedEquipment ? 'blur(4px)' : 'none', transition: 'filter 0.2s ease' }}>
               <div style={{
                 background: 'linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%)',
                 border: '2px solid #FFCD00',
@@ -1648,7 +1806,7 @@ ${resultDisplay}
             </div>
 
             {/* AI Recommendations for Each Equipment */}
-            <div style={{ marginTop: '20px' }}>
+            <div style={{ marginTop: '20px', filter: focusedEquipment ? 'blur(4px)' : 'none', transition: 'filter 0.2s ease' }}>
               <Card title="🤖 AI Recommendations by Equipment">
                 <div style={{ 
                   display: 'grid', 
@@ -1678,8 +1836,15 @@ ${resultDisplay}
                           backgroundColor: 'rgba(255, 255, 255, 0.05)',
                           borderRadius: '8px',
                           border: '1px solid rgba(255, 255, 255, 0.1)',
-                          position: 'relative'
+                          position: 'relative',
+                          cursor: 'pointer',
+                          transform: hoveredEquipmentId === equipment.equipment_id ? 'translateY(-2px)' : 'none',
+                          boxShadow: hoveredEquipmentId === equipment.equipment_id ? '0 8px 18px rgba(0,0,0,0.3)' : 'none',
+                          transition: 'all 0.2s ease'
                         }}
+                        onMouseEnter={() => setHoveredEquipmentId(equipment.equipment_id)}
+                        onMouseLeave={() => setHoveredEquipmentId(null)}
+                        onClick={() => setFocusedEquipment(equipment)}
                       >
                         {/* Equipment Header */}
                         <div style={{ 
@@ -1875,6 +2040,195 @@ ${resultDisplay}
                 </div>
               </Card>
             </div>
+
+            {/* Focus Modal Overlay */}
+            {focusedEquipment && (
+              <div
+                onClick={() => setFocusedEquipment(null)}
+                style={{
+                  position: 'fixed',
+                  top: 0,
+                  left: 0,
+                  width: '100vw',
+                  height: '100vh',
+                  backgroundColor: 'rgba(0,0,0,0.6)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 2000,
+                  backdropFilter: 'blur(2px)'
+                }}
+              >
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    width: '90%',
+                    maxWidth: '800px',
+                    background: 'linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%)',
+                    border: '2px solid #FFCD00',
+                    borderRadius: '16px',
+                    padding: '24px',
+                    color: '#ffffff',
+                    boxShadow: '0 12px 24px rgba(0,0,0,0.4)'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <h3 style={{ margin: 0, color: '#FFCD00', fontSize: '20px', fontWeight: 800 }}>
+                      {focusedEquipment.equipment_id} • {focusedEquipment.type || 'Equipment'}
+                    </h3>
+                    <button
+                      onClick={() => setFocusedEquipment(null)}
+                      style={{
+                        background: '#FFCD00',
+                        color: '#000000',
+                        border: 'none',
+                        borderRadius: '8px',
+                        padding: '8px 12px',
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Close
+                    </button>
+                  </div>
+
+                  {/* AI Recommendations (same logic as cards) */}
+                  <div style={{ marginBottom: '16px' }}>
+                    <div style={{ 
+                      color: '#FFCD00', 
+                      fontSize: '14px', 
+                      fontWeight: '600',
+                      marginBottom: '8px'
+                    }}>
+                      🎯 AI Recommendations
+                    </div>
+
+                    {focusedEquipment.overdue_status === 1 && (
+                      <div style={{
+                        padding: '6px 10px',
+                        backgroundColor: 'rgba(255, 107, 107, 0.2)',
+                        borderRadius: '6px',
+                        marginBottom: '6px',
+                        border: '1px solid rgba(255, 107, 107, 0.4)'
+                      }}>
+                        <div style={{ color: '#FF6B6B', fontSize: '11px', fontWeight: '600' }}>
+                          🔴 HIGH PRIORITY: Equipment is overdue for return
+                        </div>
+                      </div>
+                    )}
+
+                    {focusedEquipment.condition_status === 'Critical' && (
+                      <div style={{
+                        padding: '6px 10px',
+                        backgroundColor: 'rgba(255, 107, 107, 0.2)',
+                        borderRadius: '6px',
+                        marginBottom: '6px',
+                        border: '1px solid rgba(255, 107, 107, 0.4)'
+                      }}>
+                        <div style={{ color: '#FF6B6B', fontSize: '11px', fontWeight: '600' }}>
+                          🔴 CRITICAL: Immediate maintenance required
+                        </div>
+                      </div>
+                    )}
+
+                    {focusedEquipment.utilization_pct_snapshot && focusedEquipment.utilization_pct_snapshot < 50 && (
+                      <div style={{
+                        padding: '6px 10px',
+                        backgroundColor: 'rgba(255, 193, 7, 0.2)',
+                        borderRadius: '6px',
+                        marginBottom: '6px',
+                        border: '1px solid rgba(255, 193, 7, 0.4)'
+                      }}>
+                        <div style={{ color: '#FFC107', fontSize: '11px', fontWeight: '600' }}>
+                          🟡 LOW UTILIZATION: Only {focusedEquipment.utilization_pct_snapshot.toFixed(1)}% utilization
+                        </div>
+                      </div>
+                    )}
+
+                    {focusedEquipment.anomaly_flag === 1 && (
+                      <div style={{
+                        padding: '6px 10px',
+                        backgroundColor: 'rgba(255, 193, 7, 0.2)',
+                        borderRadius: '6px',
+                        marginBottom: '6px',
+                        border: '1px solid rgba(255, 193, 7, 0.4)'
+                      }}>
+                        <div style={{ color: '#FFC107', fontSize: '11px', fontWeight: '600' }}>
+                          ⚠️ ANOMALY: Operational anomaly detected
+                        </div>
+                      </div>
+                    )}
+
+                    {focusedEquipment.recommended_site && (
+                      <div style={{
+                        padding: '6px 10px',
+                        backgroundColor: 'rgba(76, 175, 80, 0.2)',
+                        borderRadius: '6px',
+                        marginBottom: '6px',
+                        border: '1px solid rgba(76, 175, 80, 0.4)'
+                      }}>
+                        <div style={{ color: '#4CAF50', fontSize: '11px', fontWeight: '600' }}>
+                          🎯 RECOMMENDED: Allocate to {focusedEquipment.recommended_site}
+                        </div>
+                      </div>
+                    )}
+
+                    {focusedEquipment.next_service_due && (
+                      <div style={{
+                        padding: '6px 10px',
+                        backgroundColor: 'rgba(255, 193, 7, 0.2)',
+                        borderRadius: '6px',
+                        marginBottom: '6px',
+                        border: '1px solid rgba(255, 193, 7, 0.4)'
+                      }}>
+                        <div style={{ color: '#FFC107', fontSize: '11px', fontWeight: '600' }}>
+                          🔧 SERVICE: Next service due {focusedEquipment.next_service_due}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Actionable list from helper */}
+                    <div style={{
+                      padding: '10px 12px',
+                      backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(255, 255, 255, 0.08)'
+                    }}>
+                      <div style={{ whiteSpace: 'pre-wrap', fontSize: '12px' }}>
+                        {getRecommendedActions(focusedEquipment)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
+                    <div style={{ padding: '12px', background: 'rgba(255,255,255,0.04)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                      <div style={{ color: '#FFCD00', fontSize: '12px', fontWeight: 700, marginBottom: '6px' }}>Rental</div>
+                      <div style={{ fontSize: '12px' }}>
+                        Check Out: {focusedEquipment.check_out_date || 'N/A'}<br/>
+                        Expected Return: {focusedEquipment.expected_return_date || 'N/A'}<br/>
+                        Check In: {focusedEquipment.check_in_date || 'N/A'}
+                      </div>
+                    </div>
+                    <div style={{ padding: '12px', background: 'rgba(255,255,255,0.04)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                      <div style={{ color: '#FFCD00', fontSize: '12px', fontWeight: 700, marginBottom: '6px' }}>Status</div>
+                      <div style={{ fontSize: '12px' }}>
+                        Status: {focusedEquipment.status || 'Unknown'}<br/>
+                        Condition: {focusedEquipment.condition_status || 'N/A'}<br/>
+                        Overdue: {focusedEquipment.overdue_status ? 'Yes' : 'No'}
+                      </div>
+                    </div>
+                    <div style={{ padding: '12px', background: 'rgba(255,255,255,0.04)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                      <div style={{ color: '#FFCD00', fontSize: '12px', fontWeight: 700, marginBottom: '6px' }}>Usage</div>
+                      <div style={{ fontSize: '12px' }}>
+                        Engine Hours/Day: {focusedEquipment.engine_hours_per_day || 'N/A'}<br/>
+                        Idle Hours/Day: {focusedEquipment.idle_hours_per_day || 'N/A'}<br/>
+                        Utilization: {focusedEquipment.utilization_pct_snapshot ? `${focusedEquipment.utilization_pct_snapshot.toFixed(1)}%` : 'N/A'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

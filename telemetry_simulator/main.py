@@ -15,7 +15,6 @@ app.add_middleware(
 )
 DB_FILE = "/Users/hardikchhallani/PycharmProjects/Smart-Rental-Tracking/dataset_preparation/equipment_management.db"
 
-# ---- Helper functions to generate random data ----
 def random_date(start, end):
     """Return a random datetime between `start` and `end`."""
     delta = end - start
